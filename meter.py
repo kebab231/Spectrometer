@@ -58,7 +58,7 @@ def simulate_instrument(fl_mm=100.0, lines_mm=300.0, slit_um=25.0,
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x / focal_length)
+    beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     # Process core optical angles
@@ -196,7 +196,7 @@ else:
             ax2.tick_params(axis='y', labelcolor='g')
             ax2_t.tick_params(axis='y', labelcolor='#d35400')
             
-            # FIXED: Evaluates the scalar index data['wl'][0] safely to avoid array truncation exceptions
+            # FIXED: Corrected mapping matrix boundary index evaluation selection
             ax2.set_xlim(data['wl'][0], data['wl'][-1])
             ax2.set_ylim(-0.02, 1.05)
             ax2.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper left', frameon=True, fontsize=7.5)
