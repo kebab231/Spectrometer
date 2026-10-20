@@ -117,11 +117,12 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(large_mask): 
         noisy_e[large_mask] = np.random.normal(total_mean_signal[large_mask], np.sqrt(total_mean_signal[large_mask]))
         
-    full_well = (np.max(lam) if np.max(lam) > 0 else 50000.0) * 1.1
-    total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well)
-    
+        full_well = 100000.0
+    read_noise = np.random.normal(0.0, 4.5, size=NUM_PX)
+    total_e = np.clip(noisy_e + read_noise, 0.0, full_well)
     telemetry_dn = np.round((total_e / full_well) * 16383.0)
-
+    
+    lam = total_mean_signal
     return {
         'wl': wl_nm, 
         'id': ideal_electrons, 
