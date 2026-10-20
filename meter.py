@@ -47,8 +47,8 @@ exponent = np.clip(exponent, 1e-15, 700.0)
 bb_radiance = (2.0 * c) / ((lam**4) * (np.exp(exponent) - 1.0))
     
     # Introduce optical absorption valleys to give the spectrum dynamic shapes
-    absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
-    ideal_photon_envelope = bb_radiance * absorption
+absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
+ideal_photon_envelope = bb_radiance * absorption
     
     # Slit Width Convolution (Line Spread Function Smearing)
     # Account for geometric optical magnification factor of the slit
