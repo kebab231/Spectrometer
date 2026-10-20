@@ -104,7 +104,7 @@ return {
         'beta_tilt': float(np.degrees(beta_zero)),
         'res_avg': float(pixel_scale_nm),
         'full_well': full_well
-    }
+        }
 
 # --- 3. STREAMLIT CONTROL PANEL SIDEBAR ---
 st.sidebar.title("Instrument Controls")
