@@ -43,8 +43,8 @@ pixel_scale_nm = np.mean(np.diff(wl_nm))  # Dynamic local dispersion
 h = 6.62607015e-34
 c = 299792458
 exponent = (h * c) / (lam * K_BOLTZ * float(temp_k))
-exponent = np.clip(exponent, 1e-5, 700.0)
-bb_radiance = (2.0 * h * (c**2)) / ((lam**5) * (np.exp(exponent) - 1.0))
+exponent = np.clip(exponent, 1e-15, 700.0)
+bb_radiance = (2.0 * c) / ((lam**4) * (np.exp(exponent) - 1.0))
     
     # Introduce optical absorption valleys to give the spectrum dynamic shapes
     absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
@@ -58,7 +58,7 @@ projected_slit_width_m = (slit_um * 1e-6) * slit_magnification
 # Convert physical slit width on the sensor to pixel units
 pixel_width_px = projected_slit_width_m / pixel_pitch_m
 # For a diffraction-limited or ideal system, sigma relates directly to pixel width
-sigma_px = max(0.5, pixel_width_px / np.sqrt(12)) 
+sigma_px = np.maximum(0.5, pixel_width_px / np.sqrt(12))
 
     k_radius = int(np.ceil(3 * sigma_px))
     k_x = np.arange(-k_radius, k_radius + 1)
