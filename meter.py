@@ -26,85 +26,69 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     beta_zero = phi_rad - theta_rad   # Nominal center reflection angle
     
     # Establish dynamic linear pixel array footprint
-  # Assume a typical sensor specification (e.g., 14 μm pixel pitch)
-pixel_pitch_m = 14e-6  
-pixel_indices = np.arange(NUM_PX) - (NUM_PX / 2.0)
-x_coords = pixel_indices * pixel_pitch_m
-
-# Calculate true beta angle for each pixel on a flat focal plane
-beta_px = beta_zero + np.arctan(x_coords / focal_length)
-
-# Apply the fundamental grating equation: m * lambda = d * (sin(alpha) + sin(beta))
-lam = grating_d * (np.sin(alpha_rad) + np.sin(beta_px))
-wl_nm = lam * 1e9
-pixel_scale_nm = np.mean(np.diff(wl_nm))  # Dynamic local dispersion
+    wl_nm = np.linspace(wl_min_target, wl_max_target, NUM_PX)
+    lam = wl_nm * 1e-9
+    pixel_scale_nm = (wl_max_target - wl_min_target) / NUM_PX
     
     # Planck's Blackbody Radiance Engine
-h = 6.62607015e-34
-c = 299792458
-exponent = (h * c) / (lam * K_BOLTZ * float(temp_k))
-exponent = np.clip(exponent, 1e-15, 700.0)
-bb_radiance = (2.0 * c) / ((lam**4) * (np.exp(exponent) - 1.0))
+    h = 6.62607015e-34
+    c = 299792458
+    exponent = (h * c) / (lam * K_BOLTZ * float(temp_k))
+    exponent = np.clip(exponent, 1e-5, 700.0)
+    bb_radiance = (2.0 * h * (c**2)) / ((lam**5) * (np.exp(exponent) - 1.0))
     
     # Introduce optical absorption valleys to give the spectrum dynamic shapes
-absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
-ideal_photon_envelope = bb_radiance * absorption
+    absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
+    ideal_photon_envelope = bb_radiance * absorption
     
     # Slit Width Convolution (Line Spread Function Smearing)
-    # Account for geometric optical magnification factor of the slit
-slit_magnification = np.cos(alpha_rad) / np.cos(beta_zero)
-projected_slit_width_m = (slit_um * 1e-6) * slit_magnification
-
-# Convert physical slit width on the sensor to pixel units
-pixel_width_px = projected_slit_width_m / pixel_pitch_m
-# For a diffraction-limited or ideal system, sigma relates directly to pixel width
-sigma_px = np.maximum(0.5, pixel_width_px / np.sqrt(12))
-
-k_radius = int(np.ceil(3 * sigma_px))
-k_x = np.arange(-k_radius, k_radius + 1)
-kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
-kernel /= np.sum(kernel)
-convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
+    slit_width_nm = slit_um * (pixel_scale_nm / 10.0)
+    sigma_px = max(0.5, slit_width_nm / pixel_scale_nm)
+    k_radius = int(np.ceil(3 * sigma_px))
+    k_x = np.arange(-k_radius, k_radius + 1)
+    kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
+    kernel /= np.sum(kernel)
+    convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
     
     # Sensor Quantum Efficiency Profile
-qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
-qe = np.clip(qe, 0.02, 0.90)
+    qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
+    qe = np.clip(qe, 0.02, 0.90)
     
     # Normalize photon scales to cleanly match your original plot multiplier scales (1e-11)
-ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
-convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
+    ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
+    convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
 
     
     # Arrhenius Thermodynamic Noise Properties
-tk = sensor_c + 273.15
-E_g = 1.12 * Q_ELEC
-dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
-dark_e = np.ones(NUM_PX) * dark_rate * 0.05 * (t_int_ms * 1e-3)
+    tk = sensor_c + 273.15
+    E_g = 1.12 * Q_ELEC
+    dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
+    dark_e = np.ones(NUM_PX) * dark_rate * 0.05 * (t_int_ms * 1e-3)
     
     # Total charge composition
-total_mean_signal = np.maximum(0.0, convolved_electrons * qe + dark_e)
+    total_mean_signal = np.maximum(0.0, convolved_electrons * qe + dark_e)
     
     # 14-Bit Quantization Dynamics
-full_well = 1.0  # Synced exactly with your top chart's 1.0 Max limit
-read_noise = np.random.normal(0.0, 0.005, size=NUM_PX)
-noisy_electrons = np.random.poisson(np.clip(total_mean_signal * 1000, 0, None)) / 1000.0
-final_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
+    full_well = 1.0  # Synced exactly with your top chart's 1.0 Max limit
+    read_noise = np.random.normal(0.0, 0.005, size=NUM_PX)
+    noisy_electrons = np.random.poisson(np.clip(total_mean_signal * 1000, 0, None)) / 1000.0
+    final_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
     
     # Convert into precise 14-bit Telemetry numbers
-telemetry_dn = np.round((final_electrons / full_well) * 16383.0)
+    telemetry_dn = np.round((final_electrons / full_well) * 16383.0)
     
-return {
-    'wl': wl_nm,
-    'id': ideal_electrons,
-    'el': final_electrons,
-    'dn': telemetry_dn,
-    'qe': qe,
-    'dk': dark_e,
-    'alpha': float(np.degrees(alpha_rad)),
-    'beta_tilt': float(np.degrees(beta_zero)),
-    'res_avg': float(pixel_scale_nm),
-    'full_well': full_well
-}
+    return {
+        'wl': wl_nm,
+        'id': ideal_electrons,
+        'el': final_electrons,
+        'dn': telemetry_dn,
+        'qe': qe,
+        'dk': dark_e,
+        'alpha': float(np.degrees(alpha_rad)),
+        'beta_tilt': float(np.degrees(beta_zero)),
+        'res_avg': float(pixel_scale_nm),
+        'full_well': full_well
+    }
 
 # --- 3. STREAMLIT CONTROL PANEL SIDEBAR ---
 st.sidebar.title("Instrument Controls")
@@ -136,8 +120,8 @@ if data is not None:
     fig1, ax1 = plt.subplots(figsize=(10, 3.5))
     ax1.plot(data['wl'], data['id'], '--', color='gray', alpha=0.7, label='Ideal Photon Envelope')
     ax1.plot(data['wl'], data['el'], color='steelblue', label='Optical Convolved Signal')
-    ax1.set_xlabel("Focal Plane Target Wavelength ($\lambda$, nm)", fontweight='bold')
-    ax1.set_ylabel("Amplitude (x$1^{11}$ $e^-$)", color='steelblue', fontweight='bold')
+    ax1.set_xlabel("Focal Plane Target Wavelength (, nm)", fontweight='bold')
+    ax1.set_ylabel("Amplitude (x111 e-)", color='steelblue', fontweight='bold')
     ax1.grid(True, linestyle=':', alpha=0.6)
     ax1.legend(loc='upper right')
     ax1.set_xlim(wl_min, wl_max)
@@ -170,7 +154,7 @@ if data is not None:
     # --- Chart 3: Sensor Quantum Efficiency Curve (MAKE SURE THIS IS INDENTED 4 SPACES) ---
     fig3, ax3 = plt.subplots(figsize=(10, 2.0))
     ax3.plot(data['wl'], data['qe'] * 100, color='forestgreen', alpha=0.8, label='Silicon CCD QE Profile')
-    ax3.set_xlabel("Wavelength ($\lambda$, nm)", fontweight='bold')
+    ax3.set_xlabel("Wavelength (, nm)", fontweight='bold')
     ax3.set_ylabel("Efficiency (%)", color='forestgreen', fontweight='bold')
     ax3.grid(True, linestyle=':', alpha=0.6)
     ax3.legend(loc='upper right')
@@ -179,7 +163,4 @@ if data is not None:
     st.pyplot(fig3)
 
 else:
-    st.error("Invalid geometric bounds. Adjust focal parameters or reduce grating line pitch settings.")
-
-
 
