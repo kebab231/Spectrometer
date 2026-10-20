@@ -141,7 +141,8 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        col1, col2 = st.columns()
+        # FIXED: Explicitly initialized with 2 columns to resolve Streamlit's structural layout parameter limit
+        col1, col2 = st.columns(2)
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
     if val_num != val_slider:
@@ -183,7 +184,7 @@ else:
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$)', color='#1a5f7a', weight='bold')
-            ax1.set_xlim(data['wl'][0], data['wl'][-1])
+            ax1.set_xlim(data['wl'], data['wl'][-1])
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=10)
             ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
@@ -209,8 +210,8 @@ else:
             ax2.legend(loc='upper right', frameon=True, fontsize=8)
             
             # --- PLOT 3: PHYSICAL HARDWARE PERFORMANCE (Pixel Scale) ---
-            p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
-            ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
+p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax3.tick_params(axis='y', labelcolor='g')
 ax3.set_ylim(-0.05, 1.05)
