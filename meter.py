@@ -137,7 +137,7 @@ if data is not None:
         f"  Sensor Array Temp: {tc:.1f}°C"
     )
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='lightgray')
-    ax1.text(0.03, 0.08, textstr, transform=ax1.transAxes, fontsize=9, verticalalignment='bottom', bbox=props)
+    ax1.text(0.03, 0.95, textstr, transform=ax1.transAxes, fontsize=9, verticalalignment='top', bbox=props)
     st.pyplot(fig1)
     
        # Chart 2: Digitized Telemetry Curves
