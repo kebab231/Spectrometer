@@ -198,14 +198,22 @@ else:
                 f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
                 f"  Sensor Array Temp: {tc:.1f}°C"
             )
-            ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
+           ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
                      bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
             
-            # --- PLOT 2: QUANTIZED TELEMETRY DATA (Wavelength Scale) ---
-            ax2.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=1.1, label='Quantized Telemetry Output')
-            ax2.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
+                      # --- PLOT 2: QUANTIZED TELEMETRY DATA (Pixel Scale) ---
+            # Create pixel indices matching the size of the array (0 to 2047)
+            pixel_indices = np.arange(NUM_PX)
+            
+            # Change the x-data here from data['wl'] to pixel_indices
+            ax2.step(pixel_indices, data['dn'], '#9a0680', where='mid', linewidth=1.1, label='Quantized Telemetry Output')
+            
+            # This is your corrected label
+            ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
             ax2.set_ylabel('Telemetry Output (DN)', color='#9a0680', weight='bold')
-            ax2.set_xlim(data['wl'][0], data['wl'][-1])
+            
+            # Adjust the limits to clip from pixel 0 to the maximum pixel index
+            ax2.set_xlim(0, NUM_PX - 1)
             ax2.set_ylim(-500, 17000)
             ax2.legend(loc='upper right', frameon=True, fontsize=8)
             
