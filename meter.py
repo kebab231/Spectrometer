@@ -104,7 +104,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     ideal_electrons = photons * qe
     electrons = ideal_electrons * PRNU_MAP
     
-      tk = sensor_c + 273.15
+    tk = sensor_c + 273.15
     E_g = 1.12 * Q_ELEC
     dark_rate = 1.5 * (tk / 298.15)**3 * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
     dark_e = (dark_rate * DSNU_MAP) * (t_int_ms * 1e-3)
