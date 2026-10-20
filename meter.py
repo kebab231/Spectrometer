@@ -60,11 +60,11 @@ pixel_width_px = projected_slit_width_m / pixel_pitch_m
 # For a diffraction-limited or ideal system, sigma relates directly to pixel width
 sigma_px = np.maximum(0.5, pixel_width_px / np.sqrt(12))
 
-    k_radius = int(np.ceil(3 * sigma_px))
-    k_x = np.arange(-k_radius, k_radius + 1)
-    kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
-    kernel /= np.sum(kernel)
-    convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
+k_radius = int(np.ceil(3 * sigma_px))
+k_x = np.arange(-k_radius, k_radius + 1)
+kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
+kernel /= np.sum(kernel)
+convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
     
     # Sensor Quantum Efficiency Profile
     qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
