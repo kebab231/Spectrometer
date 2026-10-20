@@ -98,7 +98,8 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     photons = (convolved * etendue * delta_wl * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
     qe = get_silicon_qe(wl_nm)
     
-    electrons = photons * qe * PRNU_MAP
+    ideal_electrons = photons * qe
+    electrons = ideal_electrons * PRNU_MAP
     
     tk = sensor_c + 273.15
     dark_rate_base = 0.5 * (tk / 298.15)**3 * np.exp(-(1.12 * Q_ELEC) / (2 * K_BOLTZ) * (1.0 / tk - 1.0 / 298.15))
@@ -115,7 +116,6 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     full_well = (np.max(lam) if np.max(lam) > 0 else 50000.0) * 1.1
     total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well)
     
-    # 14-bit integer quantization mapping directly to standard Data Numbers
     telemetry_dn = np.round((total_e / full_well) * 16383.0)
 
     return {
@@ -134,7 +134,8 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        col1, col2 = st.columns()
+        # FIX: Passed a relative dimension configuration [1, 2] to eliminate the TypeError
+        col1, col2 = st.columns([1, 2])
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
     if val_num != val_slider:
@@ -167,8 +168,6 @@ else:
         # --- 4. MATPLOTLIB GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.2), sharex=False)
-            
-            # Adjusted layout margins (right=0.76) to stop right axis text truncation
             fig.subplots_adjust(left=0.12, right=0.76, bottom=0.12, top=0.90, hspace=0.35)
             
             # --- SUBPLOT 1: OPTICAL SPECTRUM ---
@@ -180,16 +179,14 @@ else:
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
             ax1.tick_params(axis='y', labelcolor='#1a5f7a')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
-            ax1.set_xlim(data['wl'][0], data['wl'][-1])
+            ax1.set_xlim(data['wl'], data['wl'][-1])
             
-            # FIXED: Split Telemetry to a distinct right-side Y-axis mapping to clear overlap
             ax1_t = ax1.twinx()
             line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.7, alpha=0.8, label='Quantized Telemetry Output')
             ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
             ax1_t.tick_params(axis='y', labelcolor='#9a0680')
             ax1_t.set_ylim(-500, 17000)
             
-            # Build unified graph legend panel
             all_lines = line_id + line_el + line_dn
             all_labels = [l.get_label() for l in all_lines]
             ax1.legend(all_lines, all_labels, loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
@@ -207,7 +204,7 @@ else:
             
             # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
             pixel_indices = np.arange(NUM_PX)
-p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+            p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
