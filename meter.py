@@ -171,38 +171,25 @@ else:
     if data is None:
         st.error("Error: Target wavelength boundaries exceed physical grating limits for this line pitch.")
     else:
-        # --- 4. MATPLOTLIB GRAPH COMPONENT ---
+        # --- 4. MATPLOTLIB MULTI-GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.5), sharex=False)
-            fig.subplots_adjust(left=0.12, right=0.84, bottom=0.12, top=0.90, hspace=0.35)
+            # Setup 3 independent stacked subplots with individual x-axes
+            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10.0, 9.5))
+            fig.subplots_adjust(left=0.12, right=0.86, bottom=0.08, top=0.94, hspace=0.45)
             
-            # --- SUBPLOT 1: OPTICAL SPECTRUM ---
+            # --- PLOT 1: OPTICAL SPECTRUM (Wavelength Scale) ---
             y_scale = 1e11
-            line_id = ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
-            
-            # Draw the Analog Signal as a vibrant blue line
-            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.5, label='Optical Convolved Signal')
+            ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
+            ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.3, label='Optical Convolved Signal')
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
-            ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
-            ax1.tick_params(axis='y', labelcolor='#1a5f7a')
-            ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
+            ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$)', color='#1a5f7a', weight='bold')
             ax1.set_xlim(data['wl'][0], data['wl'][-1])
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
+            ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=10)
+            ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
             
-            ax1_t = ax1.twinx()
-            ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
-            ax1_t.tick_params(axis='y', labelcolor='#9a0680')
-            ax1_t.set_ylim(-0.05 * 16383.0, 1.05 * 16383.0)
-            
-            # --- FIX: Shift step alignment ('post') and add opacity ('alpha=0.4') ---
-            # This turns the magenta line into a clean semi-transparent layer so the blue line pops through
-            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='post', linewidth=1.2, alpha=0.4, label='Quantized Telemetry Output')
-            
-            all_lines = line_id + line_el + line_dn
-            all_labels = [l.get_label() for l in all_lines]
-            ax1.legend(all_lines, all_labels, loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
-            
+            # Geometry Meta Box
             meta_text = (
                 f"Calculated Geometry:\n"
                 f"  Incidence α: {data['alpha']:.2f}°\n"
@@ -212,19 +199,28 @@ else:
                 f"  Sensor Array Temp: {tc:.1f}°C"
             )
             ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
-bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
-# --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
-pixel_indices = np.arange(NUM_PX)
-p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
-ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
-ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
-ax2.tick_params(axis='y', labelcolor='g')
-ax2.set_ylim(-0.05, 1.05)
-ax2_t = ax2.twinx()
-p2, = ax2_t.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
-ax2_t.set_ylabel(r'Dark Noise Current ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
-ax2_t.tick_params(axis='y', labelcolor='#d35400')
-ax2.set_xlim(0, NUM_PX - 1)
-ax2.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
+                     bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
+            
+            # --- PLOT 2: QUANTIZED TELEMETRY DATA (Wavelength Scale) ---
+            ax2.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=1.1, label='Quantized Telemetry Output')
+            ax2.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
+            ax2.set_ylabel('Telemetry Output (DN)', color='#9a0680', weight='bold')
+            ax2.set_xlim(data['wl'][0], data['wl'][-1])
+            ax2.set_ylim(-500, 17000)
+            ax2.legend(loc='upper right', frameon=True, fontsize=8)
+            
+            # --- PLOT 3: PHYSICAL HARDWARE PERFORMANCE (Pixel Scale) ---
+            pixel_indices = np.arange(NUM_PX)
+p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
+ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
+ax3.tick_params(axis='y', labelcolor='g')
+ax3.set_ylim(-0.05, 1.05)
+ax3_twin = ax3.twinx()
+p2, = ax3_twin.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
+ax3_twin.set_ylabel(r'Dark Noise ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
+ax3_twin.tick_params(axis='y', labelcolor='#d35400')
+ax3.set_xlim(0, NUM_PX - 1)
+ax3.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
 st.pyplot(fig)
 plt.close(fig)
