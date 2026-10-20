@@ -131,7 +131,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
         'qe': qe, 
         'dk': dark_e, 
         'alpha': float(np.degrees(alpha_rad)), 
-        'beta_tilt': float(np.degrees(beta_tilt_rad)),
+        'beta_tilt': float(np.degrees(beta_zero)),
         'res_avg': float(np.mean(delta_wl * 1e9)), 
         'full_well': full_well
     }
