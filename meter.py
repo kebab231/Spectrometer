@@ -150,7 +150,7 @@ if data is not None:
 else:
     st.error("Invalid geometric bounds. Adjust focal parameters or reduce grating line pitch settings.")
 
-    # Chart 3: Sensor Quantum Efficiency Curve
+    # --- Chart 3: Sensor Quantum Efficiency Curve ---
     fig3, ax3 = plt.subplots(figsize=(10, 2.0))
     ax3.plot(data['wl'], data['qe'] * 100, color='forestgreen', alpha=0.8, label='Silicon CCD QE Profile')
     ax3.set_xlabel("Wavelength ($\lambda$, nm)", fontweight='bold')
@@ -160,4 +160,5 @@ else:
     ax3.set_xlim(wl_min, wl_max)
     ax3.set_ylim(-5, 105)
     st.pyplot(fig3)
+
 
