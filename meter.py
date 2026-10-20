@@ -188,7 +188,7 @@ else:
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$)', color='#1a5f7a', weight='bold')
-            ax1.set_xlim(data['wl'][0], data['wl'][-1])
+            ax1.set_xlim(wl_min, wl_max)
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=10)
             ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
@@ -209,7 +209,7 @@ else:
             ax2.step(pixel_indices, data['dn'], '#9a0680', where='mid', linewidth=1.1, label='Quantized Telemetry Output')
             ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
             ax2.set_ylabel('Telemetry Output (DN)', color='#9a0680', weight='bold')
-            ax2.set_xlim(0, NUM_PX - 1)
+            ax2.set_xlim(0, 2048)
             ax2.set_ylim(-500, 17000)
             ax2.legend(loc='upper right', frameon=True, fontsize=8)
             
