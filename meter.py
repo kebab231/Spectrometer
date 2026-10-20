@@ -3,142 +3,9 @@ import matplotlib.pyplot as plt
 import streamlit as st
 from scipy.ndimage import gaussian_filter1d
 
-# --- 1. PAGE LAYOUT CONFIGURATION ---
-st.set_page_config(
-    page_title="JHU/APL ASPIRE Instrument Model",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Precise Metrological Constants
-H_PLANCK, C_LIGHT, K_BOLTZ, Q_ELEC = 6.62607015e-34, 299792458, 1.380649e-23, 1.60217663e-19
-NUM_PX = 2048
-
-# Seed standard calibration tables for persistent instrument hardware defects
-@st.cache_data
-def generate_static_defect_maps():
-    np.random.seed(42)
-    prnu = np.random.normal(1.0, 0.012, size=NUM_PX)
-    dsnu = np.random.lognormal(mean=0.0, sigma=0.25, size=NUM_PX)
-    return prnu, dsnu
-
-PRNU_MAP, DSNU_MAP = generate_static_defect_maps()
-
-# --- 2. CORE PHYSICS & INSTRUMENT SIMULATION ENGINE ---
-def get_silicon_qe(wl_nm):
-    """Models a back-thinned Silicon CCD Quantum Efficiency response profile down to 150 nm."""
-    qe = 0.94 * np.exp(-0.5 * ((wl_nm - 600) / 190)**2)
-    nir = 1.0 / (1.0 + np.exp((wl_nm - 1020) / 28))
-    uv = 1.0 / (1.0 + np.exp(-(wl_nm - 280) / 35))
-    base_qe = qe * nir * uv
-    
-    # Enforce strict positive UV enhancement bounds using safe angular transforms
-    uv_angle = np.clip((wl_nm - 150) / 150, 0.0, 1.0) * (np.pi / 2)
-    uv_enhancement = np.where(wl_nm < 300, 0.15 + 0.3 * np.sin(uv_angle), 0.0)
-    
-    return np.clip(np.where(wl_nm < 300, np.maximum(base_qe, uv_enhancement), base_qe), 0.0, 0.95)
-
-def simulate_instrument(fl_mm=100.0, lines_mm=300.0, slit_um=25.0, 
-                        wl_min_target=150.0, wl_max_target=1000.0,
-                        temp_k=4500.0, t_int_ms=50.0, sensor_c=25.0, vacuum_env=False):
-    
-    focal_length = fl_mm * 1e-3
-    grating_d = 1e-3 / lines_mm
-    slit_w = slit_um * 1e-6
-    etendue = (slit_w * 1e-3) * (np.pi * (0.025 / 2)**2) / (focal_length**2)
-    
-    px_pitch = 14e-6  
-    focal_x = (np.arange(NUM_PX) - NUM_PX // 2) * px_pitch
-    
-    # Validate optical geometric bounds via scalar inputs
-    lam_min, lam_max = wl_min_target * 1e-9, wl_max_target * 1e-9
-    sin_alpha_plus_beta_min = lam_min / grating_d
-    sin_alpha_plus_beta_max = lam_max / grating_d
-    
-    if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
-        return None
-        
-    beta_min_offset = np.arctan(focal_x[0] / focal_length)
-    beta_max_offset = np.arctan(focal_x[-1] / focal_length)
-    
-    # Process core optical angles
-    beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
-    alpha_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) - np.arcsin(sin_alpha_plus_beta_min)) - 0.5 * (beta_min_offset + beta_max_offset)
-    
-    beta_rad = beta_tilt_rad + np.arctan(focal_x / focal_length)
-    sin_beta = np.sin(beta_rad)
-    sin_alpha = np.sin(alpha_rad)
-    
-    if np.any(np.abs(sin_alpha + sin_beta) > 1.0):
-        return None
-        
-    wl_m = grating_d * (sin_alpha + sin_beta)
-    if np.any(wl_m <= 0):
-        return None
-    wl_nm = wl_m * 1e9
-    
-    # Optimized Planck Radiance Engine
-    m1 = 2 * H_PLANCK * C_LIGHT**2
-    with np.errstate(over='ignore', divide='ignore'):
-        m2 = (H_PLANCK * C_LIGHT) / (wl_m * K_BOLTZ * temp_k)
-        radiance = np.nan_to_num(m1 / (wl_m**5 * (np.exp(m2) - 1.0)))
-        
-    ideal_spec = radiance.copy()
-    absorption_lines = [(280.0, 4.0, 0.75), (450.0, 3.0, 0.6), (600.0, 8.0, 0.7), (850.0, 15.0, 0.5)]
-    for center, fwhm, depth in absorption_lines:
-        ideal_spec *= (1.0 - depth * np.exp(-0.5 * ((wl_nm - center) / (fwhm / 2.355))**2))
-
-    if not vacuum_env:
-        air_transmission = 1.0 / (1.0 + np.exp(-(wl_nm - 210.0) / 4.5))
-        ideal_spec *= air_transmission
-
-    # Optimized Wave-Mechanical 1D Gaussian Convolution Matrix
-    mag_slit = slit_w * (np.cos(alpha_rad) / np.cos(beta_rad))
-    lsf_width_m = np.sqrt(mag_slit**2 + (wl_m * (focal_length / 0.025))**2)
-    sigma_m = lsf_width_m / 2.355
-    
-    mean_dispersion = np.mean(np.diff(focal_x))
-    sigma_pixels = np.mean(sigma_m) / mean_dispersion
-    convolved = gaussian_filter1d(ideal_spec, sigma=sigma_pixels, mode='nearest')
-
-    # Metrological Electron Transport Mapping
-    rld = (grating_d * np.cos(beta_rad)) / focal_length
-    delta_wl = rld * px_pitch
-    power = convolved * etendue * delta_wl
-    photons = (power * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
-    qe = get_silicon_qe(wl_nm)
-    
-    ideal_electrons = photons * qe
-    electrons = ideal_electrons * PRNU_MAP
-    
-    # Thermal Dark Current Defects
-    tk = sensor_c + 273.15
-    dark_rate_base = 0.5 * (tk / 298.15)**3 * np.exp(-(1.12 * Q_ELEC) / (2 * K_BOLTZ) * (1.0 / tk - 1.0 / 298.15))
-    dark_e = (dark_rate_base * DSNU_MAP) * (t_int_ms * 1e-3)
-    
-    # Fast vectorized Poisson-Gaussian statistical approximation channel
-    lam = np.maximum(0.0, electrons + dark_e)
-    noisy_e = np.zeros_like(lam)
-    
-    large_thresh = 1000
-    large_mask = lam > large_thresh
-    small_mask = ~large_mask
-    
-    if np.any(small_mask):
-        noisy_e[small_mask] = np.random.poisson(lam[small_mask])
-    if np.any(large_mask):
-        noisy_e[large_mask] = np.random.normal(lam[large_mask], np.sqrt(lam[large_mask]))
-        
-    total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, 50000.0)
-    gain = 16383.0 / 50000.0
-    import numpy as np
-import matplotlib.pyplot as plt
-import streamlit as st
-from scipy.ndimage import gaussian_filter1d
-
 # --- 1. APP CONFIGURATION & CONSTANTS ---
 st.set_page_config(
-    page_title="JHU/APL ASPIRE Spectrometer Model",
+    page_title="JHU/APL ASPIRE Spectrometer Engine",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -152,10 +19,15 @@ NUM_PX = 2048
 
 @st.cache_data
 def generate_defect_maps():
-    """Generates repeatable sensor pixel variation maps (PRNU and DSNU)."""
+    """
+    Generates repeatable sensor pixel variation maps.
+    PRNU and DSNU are tied uniquely to the physical Pixel Index, NOT wavelength.
+    """
     np.random.seed(42)
+    # PRNU: Pixel-to-pixel gain variations
     prnu = np.random.normal(1.0, 0.012, size=NUM_PX)
-    dsnu = np.random.lognormal(mean=0.0, sigma=0.25, size=NUM_PX)
+    # DSNU: Fixed pattern dark current offset map (electrons/sec per pixel)
+    dsnu = np.random.lognormal(mean=0.0, sigma=0.25, size=NUM_PX) * 5.0
     return prnu, dsnu
 
 PRNU_MAP, DSNU_MAP = generate_defect_maps()
@@ -194,7 +66,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x[0] / focal_length)
+    beta_min_offset = np.arctan(focal_x / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     # Optical angle math
@@ -267,12 +139,11 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(large_mask):
         noisy_e[large_mask] = np.random.normal(lam[large_mask], np.sqrt(lam[large_mask]))
         
-    # Set dynamic hardware bounds to prevent 0-line truncation defects
     max_signal = np.max(lam) if np.max(lam) > 0 else 50000.0
     full_well_capacity = max_signal * 1.1
     
     total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well_capacity)
-    gain = 16383.0 / full_well_capacity  # Scaling factor mapped to a 14-bit scale
+    gain = 16383.0 / full_well_capacity  # Scaling factor mapped to a 14-bit ADC scale
 
     return {
         'wl': wl_nm, 
@@ -296,7 +167,7 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     """Helper method creating text inputs side-by-side with interactive sliders."""
     st.sidebar.markdown(f"**{label}**")
-    col1, col2 = st.sidebar.columns([1, 2])
+    col1, col2 = st.sidebar.columns()
     
     val_num = col1.number_input(
         "Value", min_value=float(min_val), max_value=float(max_val), 
@@ -307,7 +178,6 @@ def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
         value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide"
     )
     
-    # Bi-directional component logic synchronization updates
     if val_num != val_slider:
         if val_num != st.session_state.get(f"{key_prefix}_last_num", default_val):
             st.session_state[f"{key_prefix}_last_num"] = val_num
@@ -319,7 +189,6 @@ def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
             
     return val_num
 
-# Draw instrument variable blocks in the layout panel
 fl = synced_slider_input("Focal Length (mm)", 50.0, 250.0, 100.0, 10.0, "fl")
 l_mm = synced_slider_input("Grating Pitch (lines/mm)", 150.0, 1000.0, 300.0, 50.0, "l_mm")
 slit = synced_slider_input("Slit Width (µm)", 5.0, 100.0, 25.0, 5.0, "slit")
@@ -334,7 +203,6 @@ t_int = synced_slider_input("Integration Time (ms)", 1.0, 500.0, 50.0, 5.0, "t_i
 tc = synced_slider_input("Sensor Temperature (°C)", -40.0, 60.0, 25.0, 5.0, "tc")
 vacuum = st.sidebar.toggle("Vacuum Environment Mode", value=False)
 
-# Guard against user moving sliders into a logical collision
 if wl_min >= wl_max:
     st.error("Invalid Configuration: Target Minimum wavelength cannot be greater than or equal to Target Maximum wavelength.")
 else:
@@ -345,42 +213,45 @@ else:
     else:
         # --- 4. MATPLOTLIB GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9.0, 6.0), sharex=True,
-                                           gridspec_kw={'height_ratios': [2.0, 1]})
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.0), sharex=False)
+            fig.subplots_adjust(left=0.12, right=0.82, bottom=0.12, top=0.90, hspace=0.35)
             
-            fig.subplots_adjust(left=0.12, right=0.78, bottom=0.14, top=0.88, hspace=0.18)
+            # --- SUBPLOT 1: OPTICAL SPECTRUM (X-Axis: Wavelength) ---
+            y_scale = 1e11
+            ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
+            ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.2, label='Optical Convolved Signal')
+            ax1.step(data['wl'], data['dn'] / y_scale, '#9a0680', where='mid', linewidth=0.6, alpha=0.8, label='Quantized Telemetry Output')
             
-            # Subplot 1: Signal Amplitude Data
-            ax1.plot(data['wl'], data['id'], 'gray', linestyle='--', alpha=0.5, label='Ideal Photon Envelope')
-            ax1.plot(data['wl'], data['el'], '#1a5f7a', linewidth=1.1, alpha=0.7, label=r'Optical Convolved Signal ($e^-$)')
-            ax1.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.4, alpha=0.8, label='Quantized Telemetry Output')
-            ax1.set_ylabel('Focal Plane Amplitude (e- / Pixel)', weight='bold')
+            # FIXED: Added 'r' string flags to render cleanly without syntax warning escapes
+            ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
+            ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', weight='bold')
+            ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
+            ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
+            ax1.set_xlim(data['wl'][0], data['wl'][-1])
             
-            ax1.set_title('JHU/APL ASPIRE Dispersive Electro-Optical Telemetry Instrument Response Model', weight='bold', size=10, pad=10)
-            ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=7.5)
-            
-            # Subplot 2: Quantum Efficiency & Noise Floor Profiles
-            ax2_t = ax2.twinx()
-p1, = ax2.plot(data['wl'], data['qe'], 'g', linewidth=1.1, label='Silicon CCD QE Profile')
-p2, = ax2_t.plot(data['wl'], data['dk'], '#d35400', linewidth=0.6, alpha=0.7, label='Fixed-Pattern Dark DSNU')
-ax2.set_xlabel(r'Focal Plane Array Dispersion Grid Alignment ($\lambda$, nm)', weight='bold')
-ax2.set_ylabel('Quantum Efficiency [0-1]', color='g')
-ax2_t.set_ylabel(r'Dark Noise Current ($e^-$)', color='#d35400')
-ax2.tick_params(axis='y', labelcolor='g')
-ax2_t.tick_params(axis='y', labelcolor='#d35400')
-ax2.set_xlim(data['wl'][0], data['wl'][-1])
-ax2.set_ylim(-0.02, 1.05)
-ax2.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper left', frameon=True, fontsize=7.5)
-# Summary Metrics Info Overlay
-meta_text = (
-f"Calculated Alignment:\n"
-f"  Angle α: {data['alpha']:.2f}°\n"
-f"  Tilt β: {data['beta_tilt']:.2f}°\n"
-f"Performance Metrics:\n"
-f"  Mean Res: {data['res_avg']:.3f} nm/px\n"
-f"  Sensor Temp: {tc}°C"
+            # Structural alignment info box overlay
+            meta_text = (
+f"Calculated Geometry:\n"
+f"  Incidence α: {data['alpha']:.2f}°\n"
+f"  Grating Tilt β: {data['beta_tilt']:.2f}°\n"
+f"Performance:\n"
+f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
+f"  Sensor Array Temp: {tc:.1f}°C"
 )
-ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=7.5, family='monospace',
-bbox=dict(boxstyle='round,pad=0.4', facecolor='#f5f6f8', edgecolor='#bdc3c7', alpha=0.9))
+ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
+bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
+# --- SUBPLOT 2: PHYSICAL HARDWARE SENSOR PERFORMANCE (X-Axis: Pixel Index) ---
+pixel_indices = np.arange(NUM_PX)
+p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
+ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
+ax2.tick_params(axis='y', labelcolor='g')
+ax2.set_ylim(-0.05, 1.05)
+ax2_t = ax2.twinx()
+p2, = ax2_t.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
+ax2_t.set_ylabel(r'Dark Noise Current ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
+ax2_t.tick_params(axis='y', labelcolor='#d35400')
+ax2.set_xlim(0, NUM_PX - 1)
+ax2.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
 st.pyplot(fig)
 plt.close(fig)
