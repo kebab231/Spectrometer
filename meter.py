@@ -218,7 +218,7 @@ else:
             ax2.legend(loc='upper right', frameon=True, fontsize=8)
             
             # --- PLOT 3: PHYSICAL HARDWARE PERFORMANCE (Pixel Scale) ---
-            pixel_indices = np.arange(NUM_PX)
+pixel_indices = np.arange(NUM_PX)
 p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
