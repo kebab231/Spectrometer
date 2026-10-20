@@ -201,34 +201,29 @@ else:
            ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
                      bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
             
-                      # --- PLOT 2: QUANTIZED TELEMETRY DATA (Pixel Scale) ---
-            # Create pixel indices matching the size of the array (0 to 2047)
+            # --- PLOT 2: QUANTIZED TELEMETRY DATA (Pixel Scale) ---
             pixel_indices = np.arange(NUM_PX)
-            
-            # Change the x-data here from data['wl'] to pixel_indices
             ax2.step(pixel_indices, data['dn'], '#9a0680', where='mid', linewidth=1.1, label='Quantized Telemetry Output')
-            
-            # This is your corrected label
             ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
             ax2.set_ylabel('Telemetry Output (DN)', color='#9a0680', weight='bold')
-            
-            # Adjust the limits to clip from pixel 0 to the maximum pixel index
             ax2.set_xlim(0, NUM_PX - 1)
             ax2.set_ylim(-500, 17000)
             ax2.legend(loc='upper right', frameon=True, fontsize=8)
             
             # --- PLOT 3: PHYSICAL HARDWARE PERFORMANCE (Pixel Scale) ---
-pixel_indices = np.arange(NUM_PX)
-p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
-ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
-ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
-ax3.tick_params(axis='y', labelcolor='g')
-ax3.set_ylim(-0.05, 1.05)
-ax3_twin = ax3.twinx()
-p2, = ax3_twin.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
-ax3_twin.set_ylabel(r'Dark Noise ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
-ax3_twin.tick_params(axis='y', labelcolor='#d35400')
-ax3.set_xlim(0, NUM_PX - 1)
-ax3.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
+            p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+            ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
+            ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
+            ax3.tick_params(axis='y', labelcolor='g')
+            ax3.set_ylim(-0.05, 1.05)
+            
+            ax3_twin = ax3.twinx()
+            p2, = ax3_twin.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
+            ax3_twin.set_ylabel(r'Dark Noise ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
+            ax3_twin.tick_params(axis='y', labelcolor='#d35400')
+            
+            ax3.set_xlim(0, NUM_PX - 1)
+            ax3.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
+
 st.pyplot(fig)
 plt.close(fig)
