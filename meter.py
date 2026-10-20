@@ -118,7 +118,7 @@ import numpy as np
 # Assuming 'telemetry_output' is your current 1D NumPy array representing the smooth curve
 # Convert your signal to a temporary photon/electron count if it isn't already, 
 # because Poisson noise applies strictly to discrete counts.
-signal_counts = telemetry_output 
+signal_counts = telemetry_dn 
 
 # Generate Poisson (Shot) Noise
 # np.random.poisson requires inputs >= 0; clip negative values if any exist from calculations
