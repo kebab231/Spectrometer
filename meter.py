@@ -57,7 +57,8 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x / focal_length)
+    # FIX: Explicitly target focal_x[0] as a scalar to eliminate the NumPy conversion TypeError
+    beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
@@ -98,7 +99,6 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     photons = (convolved * etendue * delta_wl * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
     qe = get_silicon_qe(wl_nm)
     
-    # --- FIX: Ensure ideal_electrons variable maps cleanly ---
     ideal_electrons = photons * qe
     electrons = ideal_electrons * PRNU_MAP
     
@@ -205,7 +205,7 @@ else:
             
             # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
             pixel_indices = np.arange(NUM_PX)
-            p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
