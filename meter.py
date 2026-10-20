@@ -162,5 +162,4 @@ if data is not None:
     ax3.set_ylim(-5, 105)
     st.pyplot(fig3)
 
-else:
-
+    else:
