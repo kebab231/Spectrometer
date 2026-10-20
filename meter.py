@@ -121,7 +121,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     return {
         'wl': wl_nm, 
         'id': ideal_electrons, 
-        'el': electrons,  
+        'el': total_e,  
         'dn': telemetry_dn, 
         'qe': qe, 
         'dk': dark_e, 
@@ -141,7 +141,6 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        # FIX: Re-added explicit relative scaling layout partitions to prevent initialization failure
         col1, col2 = st.columns([1, 2])
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
@@ -181,8 +180,8 @@ else:
             y_scale = 1e11
             line_id = ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
             
-            # Bound convolved electronics array natively onto primary axis to resolve layering overlap limits
-            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.5, zorder=2, label='Optical Convolved Signal')
+            # Draw the Analog Signal as a vibrant blue line
+            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.5, label='Optical Convolved Signal')
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
@@ -196,8 +195,9 @@ else:
             ax1_t.tick_params(axis='y', labelcolor='#9a0680')
             ax1_t.set_ylim(-0.05 * 16383.0, 1.05 * 16383.0)
             
-            # Plot the telemetry step values safely inside secondary layer
-            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=1.0, alpha=0.8, zorder=3, label='Quantized Telemetry Output')
+            # --- FIX: Shift step alignment ('post') and add opacity ('alpha=0.4') ---
+            # This turns the magenta line into a clean semi-transparent layer so the blue line pops through
+            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='post', linewidth=1.2, alpha=0.4, label='Quantized Telemetry Output')
             
             all_lines = line_id + line_el + line_dn
             all_labels = [l.get_label() for l in all_lines]
@@ -211,7 +211,7 @@ else:
                 f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
                 f"  Sensor Array Temp: {tc:.1f}°C"
             )
-ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
+            ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
 bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
 # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
 pixel_indices = np.arange(NUM_PX)
