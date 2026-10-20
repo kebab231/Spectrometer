@@ -26,9 +26,18 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     beta_zero = phi_rad - theta_rad   # Nominal center reflection angle
     
     # Establish dynamic linear pixel array footprint
-    wl_nm = np.linspace(wl_min_target, wl_max_target, NUM_PX)
-    lam = wl_nm * 1e-9
-    pixel_scale_nm = (wl_max_target - wl_min_target) / NUM_PX
+  # Assume a typical sensor specification (e.g., 14 μm pixel pitch)
+pixel_pitch_m = 14e-6  
+pixel_indices = np.arange(NUM_PX) - (NUM_PX / 2.0)
+x_coords = pixel_indices * pixel_pitch_m
+
+# Calculate true beta angle for each pixel on a flat focal plane
+beta_px = beta_zero + np.arctan(x_coords / focal_length)
+
+# Apply the fundamental grating equation: m * lambda = d * (sin(alpha) + sin(beta))
+lam = grating_d * (np.sin(alpha_rad) + np.sin(beta_px))
+wl_nm = lam * 1e9
+pixel_scale_nm = np.mean(np.diff(wl_nm))  # Dynamic local dispersion
     
     # Planck's Blackbody Radiance Engine
     h = 6.62607015e-34
@@ -42,8 +51,15 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     ideal_photon_envelope = bb_radiance * absorption
     
     # Slit Width Convolution (Line Spread Function Smearing)
-    slit_width_nm = slit_um * (pixel_scale_nm / 10.0)
-    sigma_px = max(0.5, slit_width_nm / pixel_scale_nm)
+    # Account for geometric optical magnification factor of the slit
+slit_magnification = np.cos(alpha_rad) / np.cos(beta_zero)
+projected_slit_width_m = (slit_um * 1e-6) * slit_magnification
+
+# Convert physical slit width on the sensor to pixel units
+pixel_width_px = projected_slit_width_m / pixel_pitch_m
+# For a diffraction-limited or ideal system, sigma relates directly to pixel width
+sigma_px = max(0.5, pixel_width_px / np.sqrt(12)) 
+
     k_radius = int(np.ceil(3 * sigma_px))
     k_x = np.arange(-k_radius, k_radius + 1)
     kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
