@@ -163,3 +163,5 @@ if data is not None:
     st.pyplot(fig3)
 
     else:
+     st.error("Invalid geometric bounds. Adjust focal parameters or reduce grating line pitch settings.")
+    
