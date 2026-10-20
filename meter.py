@@ -57,7 +57,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x / focal_length)
+    beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
@@ -141,7 +141,8 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        col1, col2 = st.columns()
+        # FIX: Re-added explicit relative scaling layout partitions to prevent initialization failure
+        col1, col2 = st.columns([1, 2])
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
     if val_num != val_slider:
@@ -180,28 +181,24 @@ else:
             y_scale = 1e11
             line_id = ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
             
+            # Bound convolved electronics array natively onto primary axis to resolve layering overlap limits
+            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.5, zorder=2, label='Optical Convolved Signal')
+            
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
             ax1.tick_params(axis='y', labelcolor='#1a5f7a')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
-            ax1.set_xlim(data['wl'], data['wl'][-1])
+            ax1.set_xlim(data['wl'][0], data['wl'][-1])
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
             
-            # Create secondary independent Y axis
             ax1_t = ax1.twinx()
             ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
             ax1_t.tick_params(axis='y', labelcolor='#9a0680')
             ax1_t.set_ylim(-0.05 * 16383.0, 1.05 * 16383.0)
             
-            # --- FIX: Plot the analog signal directly on ax1_t using matching normalized geometry limits ---
-            # Converting to data numbers scale ensures both lines render inside the top-most layout layer
-            normalized_electrons = (data['el'] / data['full_well']) * 16383.0
-            line_el = ax1_t.plot(data['wl'], normalized_electrons, '#1a5f7a', linewidth=1.4, alpha=0.9, zorder=4, label='Optical Convolved Signal')
+            # Plot the telemetry step values safely inside secondary layer
+            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=1.0, alpha=0.8, zorder=3, label='Quantized Telemetry Output')
             
-            # Plot the telemetry step values on top
-            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.8, alpha=0.7, zorder=5, label='Quantized Telemetry Output')
-            
-            # Bind accurate tracking references into legend panel
             all_lines = line_id + line_el + line_dn
             all_labels = [l.get_label() for l in all_lines]
             ax1.legend(all_lines, all_labels, loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
@@ -212,8 +209,8 @@ else:
                 f"  Grating Tilt β: {data['beta_tilt']:.2f}°\n"
                 f"Performance:\n"
                 f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
-f"  Sensor Array Temp: {tc:.1f}°C"
-)
+                f"  Sensor Array Temp: {tc:.1f}°C"
+            )
 ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
 bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
 # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
