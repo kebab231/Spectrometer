@@ -57,16 +57,18 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    # FIXED: Replaced focal_x with focal_x[0] to enforce pure scalar geometric boundaries
-    beta_min_offset = np.arctan(focal_x[0] / focal_length)
-    beta_max_offset = np.arctan(focal_x[-1] / focal_length)
-    
-    beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
-    alpha_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) - np.arcsin(sin_alpha_plus_beta_min)) - 0.5 * (beta_min_offset + beta_max_offset)
-    
-    beta_rad = beta_tilt_rad + np.arctan(focal_x / focal_length)
-    sin_beta = np.sin(beta_rad)
+       # Calculate center wavelength, fixed grating geometry, and exact angles
+    wl_center = 0.5 * (lam_min + lam_max)
+    theta_rad = np.radians(12.0)
+    sin_phi = wl_center / (2.0 * grating_d * np.cos(theta_rad))
+    if np.abs(sin_phi) >= 1.0:
+        return None
+    phi_rad = np.arcsin(sin_phi)
+    alpha_rad = phi_rad + theta_rad
+    beta_zero = phi_rad - theta_rad
+    beta_rad = beta_zero + np.arctan(focal_x / focal_length)
     sin_alpha = np.sin(alpha_rad)
+    sin_beta = np.sin(beta_rad)
     
     if np.any(np.abs(sin_alpha + sin_beta) > 1.0):
         return None
@@ -102,17 +104,18 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     ideal_electrons = photons * qe
     electrons = ideal_electrons * PRNU_MAP
     
-    tk = sensor_c + 273.15
-    dark_rate_base = 0.5 * (tk / 298.15)**3 * np.exp(-(1.12 * Q_ELEC) / (2 * K_BOLTZ) * (1.0 / tk - 1.0 / 298.15))
-    dark_e = (dark_rate_base * DSNU_MAP) * (t_int_ms * 1e-3)
-    
-    lam = np.maximum(0.0, electrons + dark_e)
-    noisy_e = np.zeros_like(lam)
-    
-    large_mask = lam > 1000
+      tk = sensor_c + 273.15
+    E_g = 1.12 * Q_ELEC
+    dark_rate = 1.5 * (tk / 298.15)**3 * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
+    dark_e = (dark_rate * DSNU_MAP) * (t_int_ms * 1e-3)
+    total_mean_signal = np.maximum(0.0, ideal_electrons * PRNU_MAP + dark_e)
+    noisy_e = np.zeros_like(total_mean_signal)
+    large_mask = total_mean_signal > 1000
     small_mask = ~large_mask
-    if np.any(small_mask): noisy_e[small_mask] = np.random.poisson(lam[small_mask])
-    if np.any(large_mask):  noisy_e[large_mask] = np.random.normal(lam[large_mask], np.sqrt(lam[large_mask]))
+    if np.any(small_mask): 
+        noisy_e[small_mask] = np.random.poisson(total_mean_signal[small_mask])
+    if np.any(large_mask): 
+        noisy_e[large_mask] = np.random.normal(total_mean_signal[large_mask], np.sqrt(total_mean_signal[large_mask]))
         
     full_well = (np.max(lam) if np.max(lam) > 0 else 50000.0) * 1.1
     total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well)
