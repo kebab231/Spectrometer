@@ -57,7 +57,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x[0] / focal_length)
+    beta_min_offset = np.arctan(focal_x / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
@@ -98,6 +98,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     photons = (convolved * etendue * delta_wl * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
     qe = get_silicon_qe(wl_nm)
     
+    # --- FIX: Ensure ideal_electrons variable maps cleanly ---
     ideal_electrons = photons * qe
     electrons = ideal_electrons * PRNU_MAP
     
@@ -105,7 +106,6 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     dark_rate_base = 0.5 * (tk / 298.15)**3 * np.exp(-(1.12 * Q_ELEC) / (2 * K_BOLTZ) * (1.0 / tk - 1.0 / 298.15))
     dark_e = (dark_rate_base * DSNU_MAP) * (t_int_ms * 1e-3)
     
-    # FIXED: Re-anchored electrons data mapping channel to prevent signal sag
     lam = np.maximum(0.0, electrons + dark_e)
     noisy_e = np.zeros_like(lam)
     
@@ -168,9 +168,7 @@ else:
         # --- 4. MATPLOTLIB GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.5), sharex=False)
-            
-            # FIXED: Set right margin to 0.74 to give right-side vertical axis labels clearance
-            fig.subplots_adjust(left=0.12, right=0.74, bottom=0.12, top=0.90, hspace=0.35)
+            fig.subplots_adjust(left=0.12, right=0.84, bottom=0.12, top=0.90, hspace=0.35)
             
             # --- SUBPLOT 1: OPTICAL SPECTRUM ---
             y_scale = 1e11
@@ -182,16 +180,12 @@ else:
             ax1.tick_params(axis='y', labelcolor='#1a5f7a')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
             ax1.set_xlim(data['wl'][0], data['wl'][-1])
-            
-            # Calculate a perfectly scaled peak boundary limit matching left/right axes
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
             
             ax1_t = ax1.twinx()
             line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.7, alpha=0.8, label='Quantized Telemetry Output')
             ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
             ax1_t.tick_params(axis='y', labelcolor='#9a0680')
-            
-            # FIXED: Aligned the right axis bounds exactly to 14-bit full-scale proportions 
             ax1_t.set_ylim(-0.05 * 16383.0, 1.05 * 16383.0)
             
             all_lines = line_id + line_el + line_dn
@@ -208,9 +202,10 @@ else:
             )
             ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
                      bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
-# --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
-pixel_indices = np.arange(NUM_PX)
-p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
+            
+            # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
+            pixel_indices = np.arange(NUM_PX)
+            p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
