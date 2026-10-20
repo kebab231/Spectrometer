@@ -93,7 +93,7 @@ final_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
     # Convert into precise 14-bit Telemetry numbers
 telemetry_dn = np.round((final_electrons / full_well) * 16383.0)
     
-return {
+    return {
         'wl': wl_nm,
         'id': ideal_electrons,
         'el': final_electrons,
@@ -104,7 +104,7 @@ return {
         'beta_tilt': float(np.degrees(beta_zero)),
         'res_avg': float(pixel_scale_nm),
         'full_well': full_well
-        }
+            }
 
 # --- 3. STREAMLIT CONTROL PANEL SIDEBAR ---
 st.sidebar.title("Instrument Controls")
