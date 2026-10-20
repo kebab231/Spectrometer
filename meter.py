@@ -82,7 +82,7 @@ dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
 dark_e = np.ones(NUM_PX) * dark_rate * 0.05 * (t_int_ms * 1e-3)
     
     # Total charge composition
-    total_mean_signal = np.maximum(0.0, convolved_electrons * qe + dark_e)
+total_mean_signal = np.maximum(0.0, convolved_electrons * qe + dark_e)
     
     # 14-Bit Quantization Dynamics
 full_well = 1.0  # Synced exactly with your top chart's 1.0 Max limit
