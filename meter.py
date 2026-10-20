@@ -112,6 +112,20 @@ data = simulate_instrument(fl, l_mm, slit, wl_min, wl_max, tk, t_int, tc, vacuum
 # --- 4. DATA VISUALIZATION DASHBOARD ---
 st.title("JHU/APL ASPIRE Spectrometer Response Model")
 
+#new stuff--------------------------
+import numpy as np
+
+# Assuming 'telemetry_output' is your current 1D NumPy array representing the smooth curve
+# Convert your signal to a temporary photon/electron count if it isn't already, 
+# because Poisson noise applies strictly to discrete counts.
+signal_counts = telemetry_output 
+
+# Generate Poisson (Shot) Noise
+# np.random.poisson requires inputs >= 0; clip negative values if any exist from calculations
+shot_noise_signal = np.random.poisson(np.maximum(0, signal_counts)).astype(float)
+
+
+
 if data is not None:
     # Chart 1: Optical Model Curves
     fig1, ax1 = plt.subplots(figsize=(10, 3.5))
