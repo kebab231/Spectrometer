@@ -55,7 +55,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     qe = np.clip(qe, 0.02, 0.90)
     
     # Normalize photon scales to cleanly match your original plot multiplier scales (1e-11)
-       ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
+    ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
     convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
 
     
