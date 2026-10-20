@@ -120,7 +120,7 @@ if data is not None:
     fig1, ax1 = plt.subplots(figsize=(10, 3.5))
     ax1.plot(data['wl'], data['id'], '--', color='gray', alpha=0.7, label='Ideal Photon Envelope')
     ax1.plot(data['wl'], data['el'], color='steelblue', label='Optical Convolved Signal')
-    ax1.set_xlabel("Focal Plane Target Wavelength (, nm)", fontweight='bold')
+    ax1.set_xlabel("Focal Plane Target Wavelength (nm)", fontweight='bold')
     ax1.set_ylabel("Amplitude (x111 e-)", color='steelblue', fontweight='bold')
     ax1.grid(True, linestyle=':', alpha=0.6)
     ax1.legend(loc='upper right')
@@ -128,7 +128,14 @@ if data is not None:
     ax1.set_ylim(-0.05, 1.05)
     
     # Physical Dashboard Statistics overlay box
-   
+    textstr = (
+        f"Calculated Geometry:\n"
+        f"  Incidence $\\alpha$: {data['alpha']:.2f}°\n"
+        f"  Grating Tilt $\\beta$: {data['beta_tilt']:.2f}°\n"
+        f"Performance:\n"
+        f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
+        f"  Sensor Array Temp: {tc:.1f}°C"
+    )
     props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='lightgray')
     ax1.text(0.03, 0.08, textstr, transform=ax1.transAxes, fontsize=9, verticalalignment='bottom', bbox=props)
     st.pyplot(fig1)
