@@ -57,7 +57,6 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    # FIX: Explicitly target focal_x[0] as a scalar to eliminate the NumPy conversion TypeError
     beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
@@ -120,9 +119,16 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     telemetry_dn = np.round((total_e / full_well) * 16383.0)
 
     return {
-        'wl': wl_nm, 'id': ideal_electrons, 'el': total_e, 'dn': telemetry_dn, 'qe': qe, 'dk': dark_e, 
-        'alpha': float(np.degrees(alpha_rad)), 'beta_tilt': float(np.degrees(beta_tilt_rad)),
-        'res_avg': float(np.mean(delta_wl * 1e9)), 'full_well': full_well
+        'wl': wl_nm, 
+        'id': ideal_electrons, 
+        'el': electrons,  # FIX: Stores raw, unquantized analog electronics array separately
+        'dn': telemetry_dn, 
+        'qe': qe, 
+        'dk': dark_e, 
+        'alpha': float(np.degrees(alpha_rad)), 
+        'beta_tilt': float(np.degrees(beta_tilt_rad)),
+        'res_avg': float(np.mean(delta_wl * 1e9)), 
+        'full_well': full_well
     }
 
 
@@ -173,7 +179,9 @@ else:
             # --- SUBPLOT 1: OPTICAL SPECTRUM ---
             y_scale = 1e11
             line_id = ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
-            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.2, label='Optical Convolved Signal')
+            
+            # Re-allocated true blue analog channel trace with high z-order priority ranking
+            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.5, zorder=2, label='Optical Convolved Signal')
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
@@ -183,7 +191,9 @@ else:
             ax1.set_ylim(-0.05 * (data['full_well'] / y_scale), 1.05 * (data['full_well'] / y_scale))
             
             ax1_t = ax1.twinx()
-            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.7, alpha=0.8, label='Quantized Telemetry Output')
+            
+            # FIX: Added a translucent blending factor (alpha=0.65) so underlying data pops out cleanly
+            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=1.0, alpha=0.65, zorder=3, label='Quantized Telemetry Output')
             ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
             ax1_t.tick_params(axis='y', labelcolor='#9a0680')
             ax1_t.set_ylim(-0.05 * 16383.0, 1.05 * 16383.0)
@@ -201,10 +211,9 @@ else:
                 f"  Sensor Array Temp: {tc:.1f}°C"
             )
             ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
-                     bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
-            
-            # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
-            pixel_indices = np.arange(NUM_PX)
+bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
+# --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
+pixel_indices = np.arange(NUM_PX)
 p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
