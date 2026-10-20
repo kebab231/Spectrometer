@@ -10,7 +10,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Physical constants
 H_PLANCK = 6.62607015e-34  # J*s
 C_LIGHT = 299792458        # m/s
 K_BOLTZ = 1.380649e-23     # J/K
@@ -19,14 +18,9 @@ NUM_PX = 2048
 
 @st.cache_data
 def generate_defect_maps():
-    """
-    Generates repeatable sensor pixel variation maps.
-    PRNU and DSNU are tied uniquely to the physical Pixel Index, NOT wavelength.
-    """
+    """Generates repeatable sensor pixel variation maps."""
     np.random.seed(42)
-    # PRNU: Pixel-to-pixel gain variations
     prnu = np.random.normal(1.0, 0.012, size=NUM_PX)
-    # DSNU: Fixed pattern dark current offset map (electrons/sec per pixel)
     dsnu = np.random.lognormal(mean=0.0, sigma=0.25, size=NUM_PX) * 5.0
     return prnu, dsnu
 
@@ -41,7 +35,6 @@ def get_silicon_qe(wl_nm):
     uv = 1.0 / (1.0 + np.exp(-(wl_nm - 280) / 35))
     base_qe = qe * nir * uv
     
-    # UV enhancement model below 300 nm
     uv_angle = np.clip((wl_nm - 150) / 150, 0.0, 1.0) * (np.pi / 2)
     uv_enhancement = np.where(wl_nm < 300, 0.15 + 0.3 * np.sin(uv_angle), 0.0)
     
@@ -55,10 +48,8 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     slit_w = slit_um * 1e-6
     etendue = (slit_w * 1e-3) * (np.pi * (0.025 / 2)**2) / (focal_length**2)
     
-    px_pitch = 14e-6  
-    focal_x = (np.arange(NUM_PX) - NUM_PX // 2) * px_pitch
+    focal_x = (np.arange(NUM_PX) - NUM_PX // 2) * 14e-6
     
-    # Boundary check for physical diffraction limits
     lam_min, lam_max = wl_min_target * 1e-9, wl_max_target * 1e-9
     sin_alpha_plus_beta_min = lam_min / grating_d
     sin_alpha_plus_beta_max = lam_max / grating_d
@@ -66,11 +57,9 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    # Fixed scalar angle indices using specific indices instead of arrays
     beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
-    # Optical angle math
     beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
     alpha_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) - np.arcsin(sin_alpha_plus_beta_min)) - 0.5 * (beta_min_offset + beta_max_offset)
     
@@ -86,7 +75,6 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
         return None
     wl_nm = wl_m * 1e9
     
-    # Blackbody source calculation (Planck's Law)
     m1 = 2 * H_PLANCK * C_LIGHT**2
     with np.errstate(over='ignore', divide='ignore'):
         m2 = (H_PLANCK * C_LIGHT) / (wl_m * K_BOLTZ * temp_k)
@@ -94,67 +82,45 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
         
     ideal_spec = radiance.copy()
     
-    # Model physical gas/material absorption lines
     absorption_lines = [(280.0, 4.0, 0.75), (450.0, 3.0, 0.6), (600.0, 8.0, 0.7), (850.0, 15.0, 0.5)]
     for center, fwhm, depth in absorption_lines:
         ideal_spec *= (1.0 - depth * np.exp(-0.5 * ((wl_nm - center) / (fwhm / 2.355))**2))
 
     if not vacuum_env:
-        air_transmission = 1.0 / (1.0 + np.exp(-(wl_nm - 210.0) / 4.5))
-        ideal_spec *= air_transmission
+        ideal_spec *= 1.0 / (1.0 + np.exp(-(wl_nm - 210.0) / 4.5))
 
-    # Optical blur calculation based on slit projection magnification
     mag_slit = slit_w * (np.cos(alpha_rad) / np.cos(beta_rad))
     lsf_width_m = np.sqrt(mag_slit**2 + (wl_m * (focal_length / 0.025))**2)
-    sigma_m = lsf_width_m / 2.355
-    
-    mean_dispersion = np.mean(np.diff(focal_x))
-    sigma_pixels = np.mean(sigma_m) / mean_dispersion
+    sigma_pixels = np.mean(lsf_width_m / 2.355) / 14e-6
     convolved = gaussian_filter1d(ideal_spec, sigma=sigma_pixels, mode='nearest')
 
-    # Convert optical power density to total collected electron signal
-    rld = (grating_d * np.cos(beta_rad)) / focal_length
-    delta_wl = rld * px_pitch
-    power = convolved * etendue * delta_wl
-    photons = (power * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
+    delta_wl = ((grating_d * np.cos(beta_rad)) / focal_length) * 14e-6
+    photons = (convolved * etendue * delta_wl * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
     qe = get_silicon_qe(wl_nm)
     
-    ideal_electrons = photons * qe
-    electrons = ideal_electrons * PRNU_MAP
+    electrons = photons * qe * PRNU_MAP
     
-    # CCD dark current calculation
     tk = sensor_c + 273.15
     dark_rate_base = 0.5 * (tk / 298.15)**3 * np.exp(-(1.12 * Q_ELEC) / (2 * K_BOLTZ) * (1.0 / tk - 1.0 / 298.15))
     dark_e = (dark_rate_base * DSNU_MAP) * (t_int_ms * 1e-3)
     
-    # Calculate noise characteristics
     lam = np.maximum(0.0, electrons + dark_e)
     noisy_e = np.zeros_like(lam)
     
-    large_thresh = 1000
-    large_mask = lam > large_thresh
+    large_mask = lam > 1000
     small_mask = ~large_mask
-    
-    if np.any(small_mask):
-        noisy_e[small_mask] = np.random.poisson(lam[small_mask])
-    if np.any(large_mask):
-        noisy_e[large_mask] = np.random.normal(lam[large_mask], np.sqrt(lam[large_mask]))
+    if np.any(small_mask): noisy_e[small_mask] = np.random.poisson(lam[small_mask])
+    if np.any(large_mask):  noisy_e[large_mask] = np.random.normal(lam[large_mask], np.sqrt(lam[large_mask]))
         
-    max_signal = np.max(lam) if np.max(lam) > 0 else 50000.0
-    full_well_capacity = max_signal * 1.1
+    full_well = (np.max(lam) if np.max(lam) > 0 else 50000.0) * 1.1
+    total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well)
     
-    total_e = np.clip(noisy_e + np.random.normal(0.0, 3.5, size=NUM_PX), 0.0, full_well_capacity)
-    gain = 16383.0 / full_well_capacity  # Scaling factor mapped to a 14-bit ADC scale
+    # 14-bit integer quantization mapping directly to standard Data Numbers
+    telemetry_dn = np.round((total_e / full_well) * 16383.0)
 
     return {
-        'wl': wl_nm, 
-        'id': ideal_electrons, 
-        'el': total_e, 
-        'dn': np.round(total_e * gain) / gain, 
-        'qe': qe, 
-        'dk': dark_e, 
-        'alpha': float(np.degrees(alpha_rad)), 
-        'beta_tilt': float(np.degrees(beta_tilt_rad)),
+        'wl': wl_nm, 'id': ideal_electrons, 'el': total_e, 'dn': telemetry_dn, 'qe': qe, 'dk': dark_e, 
+        'alpha': float(np.degrees(alpha_rad)), 'beta_tilt': float(np.degrees(beta_tilt_rad)),
         'res_avg': float(np.mean(delta_wl * 1e9))
     }
 
@@ -166,30 +132,15 @@ st.markdown("---")
 st.sidebar.header("Instrument Controls")
 
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
-    """Helper method creating text inputs side-by-side with interactive sliders."""
     st.sidebar.markdown(f"**{label}**")
-    
     with st.sidebar:
-        col1, col2 = st.columns([1, 2])
-        
-        val_num = col1.number_input(
-            "Value", min_value=float(min_val), max_value=float(max_val), 
-            value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num"
-        )
-        val_slider = col2.slider(
-            "Slider", min_value=float(min_val), max_value=float(max_val), 
-            value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide"
-        )
-    
+        col1, col2 = st.columns()
+        val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
+        val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
     if val_num != val_slider:
-        if val_num != st.session_state.get(f"{key_prefix}_last_num", default_val):
-            st.session_state[f"{key_prefix}_last_num"] = val_num
-            st.rerun()
-        else:
-            val_num = val_slider
-            st.session_state[f"{key_prefix}_last_num"] = val_slider
-            st.rerun()
-            
+        val_num = val_slider if val_num == st.session_state.get(f"{key_prefix}_last_num", default_val) else val_num
+        st.session_state[f"{key_prefix}_last_num"] = val_num
+        st.rerun()
     return val_num
 
 fl = synced_slider_input("Focal Length (mm)", 50.0, 250.0, 100.0, 10.0, "fl")
@@ -210,47 +161,57 @@ if wl_min >= wl_max:
     st.error("Invalid Configuration: Target Minimum wavelength cannot be greater than or equal to Target Maximum wavelength.")
 else:
     data = simulate_instrument(fl, l_mm, slit, wl_min, wl_max, tk, t_int, tc, vacuum)
-
     if data is None:
         st.error("Error: Target wavelength boundaries exceed physical grating limits for this line pitch.")
     else:
         # --- 4. MATPLOTLIB GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.0), sharex=False)
-            fig.subplots_adjust(left=0.12, right=0.82, bottom=0.12, top=0.90, hspace=0.35)
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 7.2), sharex=False)
             
-            # --- SUBPLOT 1: OPTICAL SPECTRUM (X-Axis: Wavelength) ---
+            # Adjusted layout margins (right=0.76) to stop right axis text truncation
+            fig.subplots_adjust(left=0.12, right=0.76, bottom=0.12, top=0.90, hspace=0.35)
+            
+            # --- SUBPLOT 1: OPTICAL SPECTRUM ---
             y_scale = 1e11
-            ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
-            ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.2, label='Optical Convolved Signal')
-            ax1.step(data['wl'], data['dn'] / y_scale, '#9a0680', where='mid', linewidth=0.6, alpha=0.8, label='Quantized Telemetry Output')
+            line_id = ax1.plot(data['wl'], data['id'] / y_scale, 'gray', linestyle='--', alpha=0.6, label='Ideal Photon Envelope')
+            line_el = ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.2, label='Optical Convolved Signal')
             
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
-            ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', weight='bold')
+            ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
+            ax1.tick_params(axis='y', labelcolor='#1a5f7a')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
-            ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
             ax1.set_xlim(data['wl'][0], data['wl'][-1])
             
-    # Structural alignment info box overlay
-meta_text = (
-f"Calculated Geometry:\n"
-f"  Incidence α: {data['alpha']:.2f}°\n"
-f"  Grating Tilt β: {data['beta_tilt']:.2f}°\n"
-f"Performance:\n"
-f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
-f"  Sensor Array Temp: {tc:.1f}°C"
-)
-ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
-bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
-# --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE (X-Axis: Pixel Index) ---
-pixel_indices = np.arange(NUM_PX)
-# Left Y-Axis: Quantum Efficiency
+            # FIXED: Split Telemetry to a distinct right-side Y-axis mapping to clear overlap
+            ax1_t = ax1.twinx()
+            line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.7, alpha=0.8, label='Quantized Telemetry Output')
+            ax1_t.set_ylabel('Telemetry Output (Digital Numbers, DN)', color='#9a0680', weight='bold')
+            ax1_t.tick_params(axis='y', labelcolor='#9a0680')
+            ax1_t.set_ylim(-500, 17000)
+            
+            # Build unified graph legend panel
+            all_lines = line_id + line_el + line_dn
+            all_labels = [l.get_label() for l in all_lines]
+            ax1.legend(all_lines, all_labels, loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
+            
+            meta_text = (
+                f"Calculated Geometry:\n"
+                f"  Incidence α: {data['alpha']:.2f}°\n"
+                f"  Grating Tilt β: {data['beta_tilt']:.2f}°\n"
+                f"Performance:\n"
+                f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
+                f"  Sensor Array Temp: {tc:.1f}°C"
+            )
+            ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
+                     bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
+            
+            # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
+            pixel_indices = np.arange(NUM_PX)
 p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
 ax2.set_ylim(-0.05, 1.05)
-# Right Y-Axis: Spatial Fixed Pattern DSNU Offset Noise Base
 ax2_t = ax2.twinx()
 p2, = ax2_t.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
 ax2_t.set_ylabel(r'Dark Noise Current ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
