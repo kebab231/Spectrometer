@@ -167,16 +167,19 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     """Helper method creating text inputs side-by-side with interactive sliders."""
     st.sidebar.markdown(f"**{label}**")
-    col1, col2 = st.sidebar.columns()
     
-    val_num = col1.number_input(
-        "Value", min_value=float(min_val), max_value=float(max_val), 
-        value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num"
-    )
-    val_slider = col2.slider(
-        "Slider", min_value=float(min_val), max_value=float(max_val), 
-        value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide"
-    )
+    # FIX: Use layout columns within a sidebar context block
+    with st.sidebar:
+        col1, col2 = st.columns([1, 2]) # 1:2 visual size ratio layout
+        
+        val_num = col1.number_input(
+            "Value", min_value=float(min_val), max_value=float(max_val), 
+            value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num"
+        )
+        val_slider = col2.slider(
+            "Slider", min_value=float(min_val), max_value=float(max_val), 
+            value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide"
+        )
     
     if val_num != val_slider:
         if val_num != st.session_state.get(f"{key_prefix}_last_num", default_val):
@@ -188,6 +191,7 @@ def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
             st.rerun()
             
     return val_num
+
 
 fl = synced_slider_input("Focal Length (mm)", 50.0, 250.0, 100.0, 10.0, "fl")
 l_mm = synced_slider_input("Grating Pitch (lines/mm)", 150.0, 1000.0, 300.0, 50.0, "l_mm")
