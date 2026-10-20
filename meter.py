@@ -128,17 +128,7 @@ if data is not None:
     ax1.set_ylim(-0.05, 1.05)
     
     # Physical Dashboard Statistics overlay box
-    textstr = (
-        f"Calculated Geometry:\n"
-        f"  Incidence $\\alpha$: {data['alpha']:.2f}°\n"
-        f"  Grating Tilt $\\beta$: {data['beta_tilt']:.2f}°\n"
-        f"Performance:\n"
-        f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
-        f"  Sensor Array Temp: {tc:.1f}°C"
-    )
-    props = dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='lightgray')
-    ax1.text(0.03, 0.08, textstr, transform=ax1.transAxes, fontsize=9, verticalalignment='bottom', bbox=props)
-    st.pyplot(fig1)
+   
     
        # Chart 2: Digitized Telemetry Curves
     fig2, ax2 = plt.subplots(figsize=(10, 2.5))
