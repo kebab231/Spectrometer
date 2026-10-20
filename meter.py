@@ -55,9 +55,9 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     qe = np.clip(qe, 0.02, 0.90)
     
     # Normalize photon scales to cleanly match your original plot multiplier scales (1e-11)
-    norm_factor = 1e-17 * (t_int_ms / 50.0) * (float(temp_k) / 4500.0)
-    ideal_electrons = ideal_photon_envelope * norm_factor
-    convolved_electrons = convolved_signal * norm_factor
+       ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
+    convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
+
     
     # Arrhenius Thermodynamic Noise Properties
     tk = sensor_c + 273.15
