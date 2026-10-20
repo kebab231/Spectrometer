@@ -134,7 +134,6 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        # FIX: Passed a relative dimension configuration [1, 2] to eliminate the TypeError
         col1, col2 = st.columns([1, 2])
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
@@ -179,7 +178,9 @@ else:
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', color='#1a5f7a', weight='bold')
             ax1.tick_params(axis='y', labelcolor='#1a5f7a')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
-            ax1.set_xlim(data['wl'], data['wl'][-1])
+            
+            # --- FIX: Explicitly pass the first value data['wl'][0] instead of the whole array ---
+            ax1.set_xlim(data['wl'][0], data['wl'][-1])
             
             ax1_t = ax1.twinx()
             line_dn = ax1_t.step(data['wl'], data['dn'], '#9a0680', where='mid', linewidth=0.7, alpha=0.8, label='Quantized Telemetry Output')
@@ -205,7 +206,7 @@ else:
             # --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE ---
             pixel_indices = np.arange(NUM_PX)
             p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
-ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
+            ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
 ax2.set_ylim(-0.05, 1.05)
