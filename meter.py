@@ -67,31 +67,31 @@ kernel /= np.sum(kernel)
 convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
     
     # Sensor Quantum Efficiency Profile
-    qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
-    qe = np.clip(qe, 0.02, 0.90)
+qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
+qe = np.clip(qe, 0.02, 0.90)
     
     # Normalize photon scales to cleanly match your original plot multiplier scales (1e-11)
-    ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
-    convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
+ideal_electrons = (ideal_photon_envelope / np.max(ideal_photon_envelope)) * 0.8 if np.max(ideal_photon_envelope) > 0 else ideal_photon_envelope
+convolved_electrons = (convolved_signal / np.max(convolved_signal)) * 0.8 if np.max(convolved_signal) > 0 else convolved_signal
 
     
     # Arrhenius Thermodynamic Noise Properties
-    tk = sensor_c + 273.15
-    E_g = 1.12 * Q_ELEC
-    dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
-    dark_e = np.ones(NUM_PX) * dark_rate * 0.05 * (t_int_ms * 1e-3)
+tk = sensor_c + 273.15
+E_g = 1.12 * Q_ELEC
+dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
+dark_e = np.ones(NUM_PX) * dark_rate * 0.05 * (t_int_ms * 1e-3)
     
     # Total charge composition
     total_mean_signal = np.maximum(0.0, convolved_electrons * qe + dark_e)
     
     # 14-Bit Quantization Dynamics
-    full_well = 1.0  # Synced exactly with your top chart's 1.0 Max limit
-    read_noise = np.random.normal(0.0, 0.005, size=NUM_PX)
-    noisy_electrons = np.random.poisson(np.clip(total_mean_signal * 1000, 0, None)) / 1000.0
-    final_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
+full_well = 1.0  # Synced exactly with your top chart's 1.0 Max limit
+read_noise = np.random.normal(0.0, 0.005, size=NUM_PX)
+noisy_electrons = np.random.poisson(np.clip(total_mean_signal * 1000, 0, None)) / 1000.0
+final_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
     
     # Convert into precise 14-bit Telemetry numbers
-    telemetry_dn = np.round((final_electrons / full_well) * 16383.0)
+telemetry_dn = np.round((final_electrons / full_well) * 16383.0)
     
     return {
         'wl': wl_nm,
