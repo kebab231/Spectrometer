@@ -40,8 +40,8 @@ wl_nm = lam * 1e9
 pixel_scale_nm = np.mean(np.diff(wl_nm))  # Dynamic local dispersion
     
     # Planck's Blackbody Radiance Engine
-    h = 6.62607015e-34
-    c = 299792458
+h = 6.62607015e-34
+c = 299792458
     exponent = (h * c) / (lam * K_BOLTZ * float(temp_k))
     exponent = np.clip(exponent, 1e-5, 700.0)
     bb_radiance = (2.0 * h * (c**2)) / ((lam**5) * (np.exp(exponent) - 1.0))
