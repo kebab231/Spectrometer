@@ -57,7 +57,7 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x[0] / focal_length)
+    beta_min_offset = np.arctan(focal_x / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     beta_tilt_rad = 0.5 * (np.arcsin(sin_alpha_plus_beta_max) + np.arcsin(sin_alpha_plus_beta_min))
@@ -141,7 +141,7 @@ st.sidebar.header("Instrument Controls")
 def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     st.sidebar.markdown(f"**{label}**")
     with st.sidebar:
-        col1, col2 = st.columns([1, 2])
+        col1, col2 = st.columns()
         val_num = col1.number_input("", min_value=float(min_val), max_value=float(max_val), value=float(default_val), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_num")
         val_slider = col2.slider("", min_value=float(min_val), max_value=float(max_val), value=float(val_num), step=float(step), label_visibility="collapsed", key=f"{key_prefix}_slide")
     if val_num != val_slider:
@@ -173,7 +173,6 @@ else:
     else:
         # --- 4. MATPLOTLIB MULTI-GRAPH COMPONENT ---
         with plt.rc_context({'axes.grid': True, 'grid.linestyle': ':', 'font.size': 8.5}):
-            # Setup 3 independent stacked subplots with individual x-axes
             fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10.0, 9.5))
             fig.subplots_adjust(left=0.12, right=0.86, bottom=0.08, top=0.94, hspace=0.45)
             
@@ -189,7 +188,6 @@ else:
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=10)
             ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
             
-            # Geometry Meta Box
             meta_text = (
                 f"Calculated Geometry:\n"
                 f"  Incidence α: {data['alpha']:.2f}°\n"
@@ -198,7 +196,7 @@ else:
                 f"  Mean Dispersion: {data['res_avg']:.3f} nm/px\n"
                 f"  Sensor Array Temp: {tc:.1f}°C"
             )
-           ax2.set_xlabel('Telemetry Array Channel (Pixel Bin Index)', weight='bold')
+            ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
                      bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
             
             # --- PLOT 2: QUANTIZED TELEMETRY DATA (Pixel Scale) ---
@@ -213,17 +211,14 @@ else:
             # --- PLOT 3: PHYSICAL HARDWARE PERFORMANCE (Pixel Scale) ---
             p1, = ax3.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
             ax3.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
-            ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
-            ax3.tick_params(axis='y', labelcolor='g')
-            ax3.set_ylim(-0.05, 1.05)
-            
-            ax3_twin = ax3.twinx()
-            p2, = ax3_twin.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
-            ax3_twin.set_ylabel(r'Dark Noise ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
-            ax3_twin.tick_params(axis='y', labelcolor='#d35400')
-            
-            ax3.set_xlim(0, NUM_PX - 1)
-            ax3.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
-
+ax3.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
+ax3.tick_params(axis='y', labelcolor='g')
+ax3.set_ylim(-0.05, 1.05)
+ax3_twin = ax3.twinx()
+p2, = ax3_twin.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
+ax3_twin.set_ylabel(r'Dark Noise ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
+ax3_twin.tick_params(axis='y', labelcolor='#d35400')
+ax3.set_xlim(0, NUM_PX - 1)
+ax3.legend([p1, p2], [p1.get_label(), p2.get_label()], loc='upper right', frameon=True, fontsize=8)
 st.pyplot(fig)
 plt.close(fig)
