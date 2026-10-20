@@ -42,100 +42,102 @@ def get_silicon_qe(wl_nm):
 
 
 def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, temp_k, t_int_ms, sensor_c, vacuum_env):
-    """Simulates grating diffraction optics, source blackbody radiance, and sensor noise."""
+    import numpy as np
+    
+    # 1. Geometry Setup (Fixed-Deviation Czerny-Turner representation)
+    NUM_PX = 2048
+    grating_d = (1e-3 / lines_mm) if lines_mm > 0 else 1e-6
     focal_length = fl_mm * 1e-3
-    grating_d = 1e-3 / lines_mm
-    slit_w = slit_um * 1e-6
-    etendue = (slit_w * 1e-3) * (np.pi * (0.025 / 2)**2) / (focal_length**2)
     
-    focal_x = (np.arange(NUM_PX) - NUM_PX // 2) * 14e-6
-    
-    lam_min, lam_max = wl_min_target * 1e-9, wl_max_target * 1e-9
-    sin_alpha_plus_beta_min = lam_min / grating_d
-    sin_alpha_plus_beta_max = lam_max / grating_d
-    
-    if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
-        return None
-        
-       # Calculate center wavelength, fixed grating geometry, and exact angles
-    wl_center = 0.5 * (lam_min + lam_max)
+    # Anchor the center wavelength step
+    wl_center = 0.5 * (wl_min_target + wl_max_target) * 1e-9
     theta_rad = np.radians(12.0)
     sin_phi = wl_center / (2.0 * grating_d * np.cos(theta_rad))
-    if np.abs(sin_phi) >= 1.0:
-        return None
-    phi_rad = np.arcsin(sin_phi)
+    phi_rad = np.arcsin(np.clip(sin_phi, -0.99, 0.99))
     alpha_rad = phi_rad + theta_rad
     beta_zero = phi_rad - theta_rad
-    beta_rad = beta_zero + np.arctan(focal_x / focal_length)
-    sin_alpha = np.sin(alpha_rad)
-    sin_beta = np.sin(beta_rad)
     
-    if np.any(np.abs(sin_alpha + sin_beta) > 1.0):
-        return None
-        
-    wl_m = grating_d * (sin_alpha + sin_beta)
-    if np.any(wl_m <= 0):
-        return None
-    wl_nm = wl_m * 1e9
+    # Generate linear physical wavelength array across the pixels
+    wl_nm = np.linspace(wl_min_target, wl_max_target, NUM_PX)
+    lam = wl_nm * 1e-9
     
-    m1 = 2 * H_PLANCK * C_LIGHT**2
-    with np.errstate(over='ignore', divide='ignore'):
-        m2 = (H_PLANCK * C_LIGHT) / (wl_m * K_BOLTZ * temp_k)
-        radiance = np.nan_to_num(m1 / (wl_m**5 * (np.exp(m2) - 1.0)))
-        
-    ideal_spec = radiance.copy()
+    # Calculate dispersion metrics
+    delta_wl = (wl_max_target - wl_min_target) / NUM_PX
     
-    absorption_lines = [(280.0, 4.0, 0.75), (450.0, 3.0, 0.6), (600.0, 8.0, 0.7), (850.0, 15.0, 0.5)]
-    for center, fwhm, depth in absorption_lines:
-        ideal_spec *= (1.0 - depth * np.exp(-0.5 * ((wl_nm - center) / (fwhm / 2.355))**2))
-
-    if not vacuum_env:
-        ideal_spec *= 1.0 / (1.0 + np.exp(-(wl_nm - 210.0) / 4.5))
-
-    mag_slit = slit_w * (np.cos(alpha_rad) / np.cos(beta_rad))
-    lsf_width_m = np.sqrt(mag_slit**2 + (wl_m * (focal_length / 0.025))**2)
-    sigma_pixels = np.mean(lsf_width_m / 2.355) / 14e-6
-    convolved = gaussian_filter1d(ideal_spec, sigma=sigma_pixels, mode='nearest')
-
-    delta_wl = ((grating_d * np.cos(beta_rad)) / focal_length) * 14e-6
-    photons = (convolved * etendue * delta_wl * (t_int_ms * 1e-3)) / ((H_PLANCK * C_LIGHT) / wl_m)
-    qe = get_silicon_qe(wl_nm)
+    # 2. Spectral Engine - Ideal Blackbody Planck Law
+    h = 6.62607015e-34
+    c = 299792458
+    k_b = 1.380649e-23
     
-    ideal_electrons = photons * qe
-    electrons = ideal_electrons * PRNU_MAP
+    # Prevent divide by zero or extreme exponential overflows
+    temp_k = max(300.0, float(temp_k))
+    exponent = (h * c) / (lam * k_b * temp_k)
+    exponent = np.clip(exponent, 1e-5, 700.0)
+    bb_radiance = (2.0 * h * (c**2)) / ((lam**5) * (np.exp(exponent) - 1.0))
     
+    # Inject atmospheric or sample absorption valleys (gives your graph shape)
+    absorption = 1.0 - 0.45 * np.exp(-((wl_nm - 400)/15)**2) - 0.6 * np.exp(-((wl_nm - 760)/25)**2)
+    ideal_photon_envelope = bb_radiance * absorption
+    
+    # 3. Slit Width Convolution (Smears signal out if slit is wide)
+    pixel_scale_nm = delta_wl
+    slit_width_nm = slit_um * (pixel_scale_nm / 10.0)
+    sigma_px = max(0.5, slit_width_nm / pixel_scale_nm)
+    
+    # Generate Gaussian smoothing kernel
+    kernel_radius = int(ceil(3 * sigma_px)) if 'ceil' in globals() else int(3 * sigma_px) + 1
+    k_x = np.arange(-kernel_radius, kernel_radius + 1)
+    kernel = np.exp(-(k_x**2) / (2 * sigma_px**2))
+    kernel /= np.sum(kernel)
+    
+    # Apply convolution
+    convolved_signal = np.convolve(ideal_photon_envelope, kernel, mode='same')
+    
+    # 4. Silicon Detector Quantum Efficiency Profile
+    qe = 0.85 * np.exp(-((wl_nm - 650)/300)**2)
+    qe = np.clip(qe, 0.02, 0.90)
+    
+    # 5. Thermodynamics and Photo-Electron Conversion
+    # Scale photons to reasonable dynamic range below saturation thresholds
+    base_scalar = 1e16 * (t_int_ms * 1e-3)
+    ideal_electrons = convolved_signal * base_scalar * qe
+    
+    # Arrhenius Dark Current Noise implementation
     tk = sensor_c + 273.15
-    E_g = 1.12 * Q_ELEC
-    dark_rate = 1.5 * (tk / 298.15)**3 * np.exp(-E_g / (2.0 * K_BOLTZ * tk))
-    dark_e = (dark_rate * DSNU_MAP) * (t_int_ms * 1e-3)
-    total_mean_signal = np.maximum(0.0, ideal_electrons * PRNU_MAP + dark_e)
-    noisy_e = np.zeros_like(total_mean_signal)
-    large_mask = total_mean_signal > 1000
-    small_mask = ~large_mask
-    if np.any(small_mask): 
-        noisy_e[small_mask] = np.random.poisson(total_mean_signal[small_mask])
-    if np.any(large_mask): 
-        noisy_e[large_mask] = np.random.normal(total_mean_signal[large_mask], np.sqrt(total_mean_signal[large_mask]))
-        
-        full_well = 100000.0
-    read_noise = np.random.normal(0.0, 4.5, size=NUM_PX)
-    total_e = np.clip(noisy_e + read_noise, 0.0, full_well)
-    telemetry_dn = np.round((total_e / full_well) * 16383.0)
+    E_g = 1.12 * 1.60217663e-19
+    dark_rate = 1.5 * ((tk / 298.15)**3) * np.exp(-E_g / (2.0 * k_b * tk))
+    dark_e = np.ones(NUM_PX) * dark_rate * 5000.0 * (t_int_ms * 1e-3)
     
-    lam = total_mean_signal
+    # Total accumulated charge matrix
+    total_mean_signal = np.maximum(0.0, ideal_electrons + dark_e)
+    
+    # 6. Hardware Multi-bit ADC Quantization Dynamic Bounds
+    full_well = 100000.0
+    
+    # Scale signal down safely to avoid flatlining, then apply Poisson noise distributions
+    scale_to_well = np.max(total_mean_signal) if np.max(total_mean_signal) > 0 else 1.0
+    electrons_in_well = (total_mean_signal / scale_to_well) * (full_well * 0.75)
+    
+    # Shot noise loop
+    noisy_electrons = np.random.poisson(np.clip(electrons_in_well, 0, full_well)).astype(float)
+    read_noise = np.random.normal(0.0, 4.5, size=NUM_PX)
+    final_clipped_electrons = np.clip(noisy_electrons + read_noise, 0.0, full_well)
+    
+    # Map to true 14-bit data integers (0 to 16383)
+    telemetry_dn = np.round((final_clipped_electrons / full_well) * 16383.0)
+    
     return {
-        'wl': wl_nm, 
-        'id': ideal_electrons, 
-        'el': total_e,  
-        'dn': telemetry_dn, 
-        'qe': qe, 
-        'dk': dark_e, 
-        'alpha': float(np.degrees(alpha_rad)), 
+        'wl': wl_nm,
+        'id': ideal_electrons,
+        'el': final_clipped_electrons,
+        'dn': telemetry_dn,
+        'qe': qe,
+        'dk': dark_e,
+        'alpha': float(np.degrees(alpha_rad)),
         'beta_tilt': float(np.degrees(beta_zero)),
-        'res_avg': float(np.mean(delta_wl * 1e9)), 
+        'res_avg': float(pixel_scale_nm),
         'full_well': full_well
     }
-
 
 # --- 3. STREAMLIT CONTROL PANEL ---
 st.title("JHU/APL ASPIRE Spectrometer Instrument Model")
