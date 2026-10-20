@@ -66,7 +66,8 @@ def simulate_instrument(fl_mm, lines_mm, slit_um, wl_min_target, wl_max_target, 
     if np.any(np.abs([sin_alpha_plus_beta_min, sin_alpha_plus_beta_max]) >= 1.0):
         return None
         
-    beta_min_offset = np.arctan(focal_x / focal_length)
+    # Fixed scalar angle indices using specific indices instead of arrays
+    beta_min_offset = np.arctan(focal_x[0] / focal_length)
     beta_max_offset = np.arctan(focal_x[-1] / focal_length)
     
     # Optical angle math
@@ -168,9 +169,8 @@ def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
     """Helper method creating text inputs side-by-side with interactive sliders."""
     st.sidebar.markdown(f"**{label}**")
     
-    # FIX: Use layout columns within a sidebar context block
     with st.sidebar:
-        col1, col2 = st.columns([1, 2]) # 1:2 visual size ratio layout
+        col1, col2 = st.columns([1, 2])
         
         val_num = col1.number_input(
             "Value", min_value=float(min_val), max_value=float(max_val), 
@@ -191,7 +191,6 @@ def synced_slider_input(label, min_val, max_val, default_val, step, key_prefix):
             st.rerun()
             
     return val_num
-
 
 fl = synced_slider_input("Focal Length (mm)", 50.0, 250.0, 100.0, 10.0, "fl")
 l_mm = synced_slider_input("Grating Pitch (lines/mm)", 150.0, 1000.0, 300.0, 50.0, "l_mm")
@@ -226,15 +225,14 @@ else:
             ax1.plot(data['wl'], data['el'] / y_scale, '#1a5f7a', linewidth=1.2, label='Optical Convolved Signal')
             ax1.step(data['wl'], data['dn'] / y_scale, '#9a0680', where='mid', linewidth=0.6, alpha=0.8, label='Quantized Telemetry Output')
             
-            # FIXED: Added 'r' string flags to render cleanly without syntax warning escapes
             ax1.set_xlabel(r'Focal Plane Target Wavelength ($\lambda$, nm)', weight='bold')
             ax1.set_ylabel(r'Amplitude ($\times 10^{11}\ e^-$ / Pixel)', weight='bold')
             ax1.set_title('JHU/APL ASPIRE Spectrometer Response Model', weight='bold', size=11, pad=12)
             ax1.legend(loc='upper right', frameon=True, facecolor='white', framealpha=0.95, fontsize=8)
             ax1.set_xlim(data['wl'][0], data['wl'][-1])
             
-            # Structural alignment info box overlay
-            meta_text = (
+    # Structural alignment info box overlay
+meta_text = (
 f"Calculated Geometry:\n"
 f"  Incidence α: {data['alpha']:.2f}°\n"
 f"  Grating Tilt β: {data['beta_tilt']:.2f}°\n"
@@ -244,13 +242,15 @@ f"  Sensor Array Temp: {tc:.1f}°C"
 )
 ax1.text(0.02, 0.05, meta_text, transform=ax1.transAxes, fontsize=8, family='monospace',
 bbox=dict(boxstyle='round,pad=0.5', facecolor='#f8f9fa', edgecolor='#bdc3c7', alpha=0.95))
-# --- SUBPLOT 2: PHYSICAL HARDWARE SENSOR PERFORMANCE (X-Axis: Pixel Index) ---
+# --- SUBPLOT 2: HARDWARE SENSOR PERFORMANCE (X-Axis: Pixel Index) ---
 pixel_indices = np.arange(NUM_PX)
+# Left Y-Axis: Quantum Efficiency
 p1, = ax2.plot(pixel_indices, data['qe'], 'g', linewidth=1.2, label='Silicon CCD QE Profile')
 ax2.set_xlabel('Physical Sensor Array Element Index (Pixel Number)', weight='bold')
 ax2.set_ylabel('Quantum Efficiency [0-1]', color='g', weight='bold')
 ax2.tick_params(axis='y', labelcolor='g')
 ax2.set_ylim(-0.05, 1.05)
+# Right Y-Axis: Spatial Fixed Pattern DSNU Offset Noise Base
 ax2_t = ax2.twinx()
 p2, = ax2_t.plot(pixel_indices, data['dk'], '#d35400', linewidth=0.5, alpha=0.8, label='Spatial Dark DSNU Floor')
 ax2_t.set_ylabel(r'Dark Noise Current ($e^-$ / pixel / sec)', color='#d35400', weight='bold')
