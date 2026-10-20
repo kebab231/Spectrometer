@@ -137,7 +137,7 @@ if data is not None:
     ax1.text(0.03, 0.08, textstr, transform=ax1.transAxes, fontsize=9, verticalalignment='bottom', bbox=props)
     st.pyplot(fig1)
     
-    # Chart 2: Digitized Telemetry Curves
+       # Chart 2: Digitized Telemetry Curves
     fig2, ax2 = plt.subplots(figsize=(10, 2.5))
     ax2.plot(np.arange(2048), data['dn'], color='purple', alpha=0.8, label='Quantized Telemetry Output')
     ax2.set_xlabel("Telemetry Array Channel (Pixel Bin Index)", fontweight='bold')
@@ -147,10 +147,8 @@ if data is not None:
     ax2.set_xlim(0, 2048)
     ax2.set_ylim(-500, 17500)
     st.pyplot(fig2)
-else:
-    st.error("Invalid geometric bounds. Adjust focal parameters or reduce grating line pitch settings.")
 
-    # --- Chart 3: Sensor Quantum Efficiency Curve ---
+    # --- Chart 3: Sensor Quantum Efficiency Curve (MAKE SURE THIS IS INDENTED 4 SPACES) ---
     fig3, ax3 = plt.subplots(figsize=(10, 2.0))
     ax3.plot(data['wl'], data['qe'] * 100, color='forestgreen', alpha=0.8, label='Silicon CCD QE Profile')
     ax3.set_xlabel("Wavelength ($\lambda$, nm)", fontweight='bold')
@@ -160,5 +158,9 @@ else:
     ax3.set_xlim(wl_min, wl_max)
     ax3.set_ylim(-5, 105)
     st.pyplot(fig3)
+
+else:
+    st.error("Invalid geometric bounds. Adjust focal parameters or reduce grating line pitch settings.")
+
 
 
