@@ -96,7 +96,7 @@ fl = st.sidebar.slider("Focal Length (mm)", 50.0, 500.0, 100.0, 10.0)
 l_mm = st.sidebar.slider("Grating Pitch (lines/mm)", 100.0, 1200.0, 300.0, 50.0)
 slit = st.sidebar.slider("Slit Width (μm)", 5.0, 200.0, 25.0, 5.0)
 
-st.sidebar.title("Spectral Spectrum Targets")
+st.sidebar.title("Wavelength Range")
 wl_min = st.sidebar.slider("Minimum Target Wavelength (nm)", 150.0, 500.0, 150.0, 10.0)
 wl_max = st.sidebar.slider("Maximum Target Wavelength (nm)", 600.0, 1100.0, 1000.0, 10.0)
 
@@ -121,7 +121,7 @@ if data is not None:
     ax1.plot(data['wl'], data['id'], '--', color='gray', alpha=0.7, label='Ideal Photon Envelope')
     ax1.plot(data['wl'], data['el'], color='steelblue', label='Optical Convolved Signal')
     ax1.set_xlabel("Focal Plane Target Wavelength (nm)", fontweight='bold')
-    ax1.set_ylabel("Amplitude (x111 e-)", color='steelblue', fontweight='bold')
+    ax1.set_ylabel("Amplitude (×10⁴ e⁻)", color='steelblue', fontweight='bold')
     ax1.grid(True, linestyle=':', alpha=0.6)
     ax1.legend(loc='upper right')
     ax1.set_xlim(wl_min, wl_max)
@@ -154,7 +154,7 @@ if data is not None:
         # --- Chart 3: Sensor Quantum Efficiency Curve (MAKE SURE THIS IS INDENTED 4 SPACES) ---
     fig3, ax3 = plt.subplots(figsize=(10, 2.0))
     ax3.plot(data['wl'], data['qe'] * 100, color='forestgreen', alpha=0.8, label='Silicon CCD QE Profile')
-    ax3.set_xlabel("Wavelength (, nm)", fontweight='bold')
+    ax3.set_xlabel("Wavelength (nm)", fontweight='bold')
     ax3.set_ylabel("Efficiency (%)", color='forestgreen', fontweight='bold')
     ax3.grid(True, linestyle=':', alpha=0.6)
     ax3.legend(loc='upper right')
